@@ -14,8 +14,8 @@ TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("BOT_TOKEN не задан. Установите переменную окружения BOT_TOKEN.")
 
-# Укажите числовой chat_id администратора (узнайте его с помощью @userinfobot или getUpdates)
-ADMIN_ID = 123456789  # Замените на свой chat_id
+# ID администратора (заменен на 1418276861)
+ADMIN_ID = 1418276861  
 
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
