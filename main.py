@@ -1,43 +1,72 @@
 import os
+import logging
 from aiogram import Bot, Dispatcher, types
+from aiogram.contrib.fsm_storage.memory import MemoryStorage
+from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters.state import State, StatesGroup
 from aiogram.utils import executor
 
+# Настройка логирования
+logging.basicConfig(level=logging.INFO)
+
+# Получаем токен из переменных окружения
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("BOT_TOKEN не задан. Установите переменную окружения BOT_TOKEN.")
 
 bot = Bot(token=TOKEN)
-dp = Dispatcher(bot)
+storage = MemoryStorage()
+dp = Dispatcher(bot, storage=storage)
 
-# Словарь для хранения временных данных пользователей
-user_data = {}
+# Определяем состояния для заказа
+class OrderStates(StatesGroup):
+    waiting_for_link = State()
+    waiting_for_screenshot = State()
 
+# Обработчик команды /start
 @dp.message_handler(commands=['start'])
-async def start(message: types.Message):
-    user_data[message.from_user.id] = {}
-    await message.answer("Привет! Отправьте ссылку на товар.")
+async def cmd_start(message: types.Message):
+    await message.answer("Привет! Отправьте, пожалуйста, ссылку на товар.")
+    await OrderStates.waiting_for_link.set()
 
-@dp.message_handler(lambda message: 'http' in message.text.lower())
-async def handle_link(message: types.Message):
-    # Сохраняем ссылку в данных пользователя
-    user_data[message.from_user.id]['link'] = message.text.strip()
-    await message.answer("Спасибо! Теперь отправьте параметры товара (например, цвет, размер и т.д.).")
+# Обработчик для получения ссылки на товар
+@dp.message_handler(state=OrderStates.waiting_for_link)
+async def process_link(message: types.Message, state: FSMContext):
+    if 'http' not in message.text.lower():
+        await message.answer("Пожалуйста, отправьте корректную ссылку, содержащую 'http'.")
+        return
+    await state.update_data(link=message.text.strip())
+    await OrderStates.waiting_for_screenshot.set()
+    await message.answer("Спасибо! Теперь отправьте скриншот, на котором видны выбранные параметры (размер, цвет, цена).")
 
-@dp.message_handler()
-async def handle_params(message: types.Message):
-    # Если ссылка уже была получена, считаем, что это параметры
-    if message.from_user.id in user_data and 'link' in user_data[message.from_user.id]:
-        user_data[message.from_user.id]['params'] = message.text.strip()
-        # Отправляем уведомление администратору, можно заменить ID на свой
-        admin_id = 123456789  
-        order_info = f"Новый заказ от {message.from_user.full_name} (ID: {message.from_user.id}):\nСсылка: {user_data[message.from_user.id]['link']}\nПараметры: {user_data[message.from_user.id]['params']}"
-        await bot.send_message(admin_id, order_info)
-        await message.answer("Ваш заказ принят! Мы свяжемся с вами для уточнения деталей.")
-        # Очистка данных пользователя
-        del user_data[message.from_user.id]
-    else:
-        # Если ссылка не была получена, напомним пользователю
-        await message.answer("Пожалуйста, сначала отправьте ссылку на товар.")
+# Обработчик для получения скриншота
+@dp.message_handler(content_types=types.ContentType.PHOTO, state=OrderStates.waiting_for_screenshot)
+async def process_screenshot(message: types.Message, state: FSMContext):
+    # Получаем фотографию (наиболее качественную)
+    photo = message.photo[-1]
+    await state.update_data(screenshot_file_id=photo.file_id)
+    data = await state.get_data()
+    link = data.get('link')
+    
+    # Формируем сообщение для администратора
+    admin_username = '@ikalugin'  # Администратор — @ikalugin
+    order_info = (
+        f"Новый заказ от {message.from_user.full_name} (ID: {message.from_user.id}):\n"
+        f"Ссылка: {link}\n"
+        f"Скриншот с параметрами прилагается ниже."
+    )
+    
+    # Отправляем уведомление админу вместе со скриншотом
+    await bot.send_photo(chat_id=admin_username, photo=photo.file_id, caption=order_info)
+    
+    # Сообщаем пользователю, что заявка принята
+    await message.answer("Заявка принята! Она будет обработана в течение 1-2 часов, и администратор свяжется с вами.")
+    await state.finish()
+
+# Если пользователь отправляет не фотографию в состоянии ожидания скриншота
+@dp.message_handler(lambda message: message.content_type != 'photo', state=OrderStates.waiting_for_screenshot)
+async def invalid_screenshot(message: types.Message):
+    await message.answer("Пожалуйста, отправьте скриншот в виде фотографии, чтобы мы могли увидеть выбранные параметры товара.")
 
 if __name__ == '__main__':
     executor.start_polling(dp, skip_updates=True)
