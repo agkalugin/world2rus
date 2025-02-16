@@ -37,13 +37,13 @@ main_menu.add("💲 Курс выкупа")
 main_menu.add("🚚 Доставка")
 main_menu.add("🛍 Магазины")
 
-# Функция для получения курса валют с ЦБ РФ (+10%)
+# Функция для получения курса валют с ЦБ РФ
 def get_currency_rates():
     url = "https://www.cbr-xml-daily.ru/daily_json.js"
     try:
         response = requests.get(url).json()
-        usd = round(response['Valute']['USD']['Value'] * 1.10, 2)
-        eur = round(response['Valute']['EUR']['Value'] * 1.10, 2)
+        usd = round(response['Valute']['USD']['Value'] * 1.10, 2)  # Доллар +10%
+        eur = round(response['Valute']['EUR']['Value'] * 1.125, 2)  # Евро +12,5%
         return usd, eur
     except Exception as e:
         logging.error(f"Ошибка при получении курса валют: {e}")
@@ -66,9 +66,9 @@ async def get_exchange_rate(message: types.Message):
     usd, eur = get_currency_rates()
     if usd and eur:
         await message.answer(
-            f"💰 *Актуальный курс выкупа (ЦБ +10%):*\n"
-            f"🇺🇸 Доллар: {usd}₽\n"
-            f"🇪🇺 Евро: {eur}₽",
+            f"💰 *Актуальный курс выкупа (ЦБ + наценка):*\n"
+            f"🇺🇸 Доллар: {usd}₽ (ЦБ +10%)\n"
+            f"🇪🇺 Евро: {eur}₽ (ЦБ +12,5%)",
             parse_mode="Markdown"
         )
     else:
