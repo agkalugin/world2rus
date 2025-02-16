@@ -65,7 +65,7 @@ async def send_order(message: types.Message):
 async def get_exchange_rate(message: types.Message):
     usd, eur = get_currency_rates()
     if usd and eur:
-        await message.answer(f"💰 *Актуальный курс выкупа:*
+        await message.answer(f"💰 *Актуальный курс выкупа:* {exchange_rate} ₽")
 🇺🇸 Доллар: {usd}₽
 🇪🇺 Евро: {eur}₽", parse_mode="Markdown")
     else:
