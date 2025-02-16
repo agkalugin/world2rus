@@ -9,10 +9,13 @@ from aiogram.utils import executor
 # Настройка логирования
 logging.basicConfig(level=logging.INFO)
 
-# Получение токена из переменных окружения
+# Получение токена бота из переменных окружения
 TOKEN = os.getenv("BOT_TOKEN")
 if not TOKEN:
     raise ValueError("BOT_TOKEN не задан. Установите переменную окружения BOT_TOKEN.")
+
+# Укажите числовой chat_id администратора (узнайте его с помощью @userinfobot или getUpdates)
+ADMIN_ID = 123456789  # Замените на свой chat_id
 
 bot = Bot(token=TOKEN)
 storage = MemoryStorage()
@@ -42,31 +45,29 @@ async def process_link(message: types.Message, state: FSMContext):
 # Обработчик для получения скриншота
 @dp.message_handler(content_types=types.ContentType.PHOTO, state=OrderStates.waiting_for_screenshot)
 async def process_screenshot(message: types.Message, state: FSMContext):
-    # Отправляем отладочное сообщение о получении фото
     await message.answer("Фото получено! Обрабатываю заказ...")
-    
-    # Получаем наиболее качественную фотографию
+
+    # Получаем последнее (наиболее качественное) фото
     photo = message.photo[-1]
     await state.update_data(screenshot_file_id=photo.file_id)
     data = await state.get_data()
     link = data.get('link')
-    
+
     # Формируем сообщение для администратора
     order_info = (
         f"Новый заказ от {message.from_user.full_name} (ID: {message.from_user.id}):\n"
         f"Ссылка: {link}\n"
         f"Скриншот с параметрами прилагается ниже."
     )
-    admin_username = 'ikalugin'  # Администратор: @ikalugin
-    
+
     try:
         # Отправляем уведомление админу с фото
-        await bot.send_photo(chat_id=admin_username, photo=photo.file_id, caption=order_info)
+        await bot.send_photo(chat_id=ADMIN_ID, photo=photo.file_id, caption=order_info)
         await message.answer("Заявка принята! Она будет обработана в течение 1-2 часов, и администратор свяжется с вами.")
     except Exception as e:
         logging.exception("Ошибка при отправке уведомления админу: %s", e)
         await message.answer("Произошла ошибка при отправке уведомления админу. Попробуйте позже.")
-    
+
     await state.finish()
 
 # Если пользователь отправляет не фотографию в состоянии ожидания скриншота
